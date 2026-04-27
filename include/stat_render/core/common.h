@@ -4,6 +4,16 @@
 #include"stat_render/core/Vector.h"
 #include<vector>
 
+#ifdef __INTELLISENSE__
+// 告诉 IntelliSense 看到这些符号时不要报错
+#define KERNEL_ARGS2(grid, block) 
+#define KERNEL_ARGS3(grid, block, sh_mem) 
+#define KERNEL_ARGS4(grid, block, sh_mem, stream) 
+#else
+#define KERNEL_ARGS2(grid, block) <<< grid, block >>>
+#define KERNEL_ARGS3(grid, block, sh_mem) <<< grid, block, sh_mem >>>
+#define KERNEL_ARGS4(grid, block, sh_mem, stream) <<< grid, block, sh_mem, stream >>>
+#endif
 
 inline constexpr float Inf = std::numeric_limits<float>::infinity();
 inline constexpr float Pi = 3.1415926535897932384626;
