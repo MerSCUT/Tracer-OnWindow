@@ -21,14 +21,11 @@ file(GLOB_RECURSE SRC_FILES "${SRC_DIR}/*.c" "${SRC_DIR}/*.cpp" "${SRC_DIR}/*.cc
 
 
 add_executable(${PROJECT_NAME})
-# 针对 Tracer 目标精确设置编码，分离 C++ 和 CUDA 的编译参数
 
 if(MSVC)
     target_compile_options(Tracer PRIVATE
-        # 对于普通的 .cpp 文件，直接传递 /utf-8 给 MSVC
         $<$<COMPILE_LANGUAGE:CXX>:/utf-8>
-        
-        # 对于 .cu 文件，通过 -Xcompiler 包装，让 nvcc 安全地转交给后端的 MSVC
+
         $<$<COMPILE_LANGUAGE:CUDA>:-Xcompiler=/utf-8>
     )
 endif()
@@ -36,7 +33,7 @@ endif()
 message(STATUS "Src files: ${SRC_FILES}")
 
 target_include_directories(${PROJECT_NAME} PRIVATE ${INCLUDE_DIR} ${CUDAToolkit_INCLUDE_DIRS})
-target_sources(${PROJECT_NAME} PRIVATE ${SRC_FILES})
+target_sources(${PROJECT_NAME} PRIVATE ${SRC_FILES} "include/tiny_obj_loader.h")
 target_link_libraries(${PROJECT_NAME} PRIVATE CUDA::cudart)
 
 # WorkDir Definition

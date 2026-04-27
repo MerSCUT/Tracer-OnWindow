@@ -23,6 +23,17 @@ public:
         m[3][0] = t30; m[3][1] = t31; m[3][2] = t32; m[3][3] = t33;
     }
 
+    static Mat4f Identity() { return Mat4f(); }
+    static Mat4f Zero() {
+        return Mat4f(
+            0.0f, 0.0f, 0.0f, 0.0f,
+            0.0f, 0.0f, 0.0f, 0.0f,
+            0.0f, 0.0f, 0.0f, 0.0f,
+            0.0f, 0.0f, 0.0f, 0.0f
+        );
+    }
+
+
     Mat4f operator*(const Mat4f& rhs) const {
         Mat4f res;
         for (int i = 0; i < 4; ++i) {       // 行
