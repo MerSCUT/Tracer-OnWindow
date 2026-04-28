@@ -21,7 +21,8 @@ struct TinyObjIndexEqual {
     }
 };
 
-MeshGeometry MeshLoader::LoadMeshFromOBJ(const std::string& filepath) {
+MeshGeometry LoadMeshFromOBJ2(const std::string& filepath)
+{
     // 配置 Reader
     MeshGeometry meshGeometry;
     tinyobj::ObjReaderConfig reader_config;
@@ -122,9 +123,9 @@ MeshGeometry MeshLoader::LoadMeshFromOBJ(const std::string& filepath) {
     return meshGeometry;
 }
 
-
-bool LoadMeshFromOBJ(const std::string& filepath, Mesh& outMesh) {
-    // 配置 Reader
+MeshGeometry MeshLoader::LoadMeshFromOBJ(const std::string& filepath)
+{
+    MeshGeometry meshGeometry;
     tinyobj::ObjReaderConfig reader_config;
     reader_config.mtl_search_path = "./";
     reader_config.triangulate = true;     // 确保多边形被转换为三角形
@@ -136,7 +137,7 @@ bool LoadMeshFromOBJ(const std::string& filepath, Mesh& outMesh) {
         if (!reader.Error().empty()) {
             std::cerr << "TinyObjReader 错误: " << reader.Error() << std::endl;
         }
-        return false; // 在引擎开发中，使用返回值而不是 exit(1) 更安全
+        return meshGeometry;
     }
 
     if (!reader.Warning().empty()) {
@@ -146,22 +147,23 @@ bool LoadMeshFromOBJ(const std::string& filepath, Mesh& outMesh) {
     auto& attrib = reader.GetAttrib();
     auto& shapes = reader.GetShapes();
 
-    // 清空输出容器，防止重复追加
-    outMesh.vertices.clear();
-    outMesh.indices.clear();
+    // 清空输出容器
+    meshGeometry.vertices.clear();
+    meshGeometry.indices.clear();
+    //meshGeometry.subMeshes.clear();
 
-    // 核心：使用哈希表记录已经处理过的唯一顶点组合
-    // Key: obj 原始索引组合, Value: outMesh.vertices 中的新索引
+    // 初始化包围盒 (使用默认构造函数中的极值)
+    Bound meshBound;
+
+    // 哈希表记录已经处理过的唯一顶点组合
     std::unordered_map<tinyobj::index_t, int, TinyObjIndexHash, TinyObjIndexEqual> uniqueVertices;
 
-    // 遍历所有 Shape (即使约定只有一个 Mesh，遍历也是安全的)
     for (const auto& shape : shapes) {
         size_t index_offset = 0;
 
         for (size_t f = 0; f < shape.mesh.num_face_vertices.size(); f++) {
             size_t fv = size_t(shape.mesh.num_face_vertices[f]);
 
-            // 防御性检查：确保确实是三角形
             if (fv != 3) {
                 std::cout << "[Info] 导入" + filepath + "时检测到非三角形图元" << std::endl;
                 index_offset += fv;
@@ -174,7 +176,6 @@ bool LoadMeshFromOBJ(const std::string& filepath, Mesh& outMesh) {
             for (size_t v = 0; v < 3; v++) {
                 tinyobj::index_t idx = shape.mesh.indices[index_offset + v];
 
-                // 如果该顶点组合是首次出现，则提取数据并压入顶点数组
                 if (uniqueVertices.count(idx) == 0) {
                     Vertex vertex;
 
@@ -183,7 +184,16 @@ bool LoadMeshFromOBJ(const std::string& filepath, Mesh& outMesh) {
                     vertex.position.y = attrib.vertices[3 * size_t(idx.vertex_index) + 1];
                     vertex.position.z = attrib.vertices[3 * size_t(idx.vertex_index) + 2];
 
-                    // 提取法线 (处理缺失情况)
+                    // 更新包围盒的 Pmin 和 Pmax
+                    meshBound.Pmin.x = std::min(meshBound.Pmin.x, vertex.position.x);
+                    meshBound.Pmin.y = std::min(meshBound.Pmin.y, vertex.position.y);
+                    meshBound.Pmin.z = std::min(meshBound.Pmin.z, vertex.position.z);
+
+                    meshBound.Pmax.x = std::max(meshBound.Pmax.x, vertex.position.x);
+                    meshBound.Pmax.y = std::max(meshBound.Pmax.y, vertex.position.y);
+                    meshBound.Pmax.z = std::max(meshBound.Pmax.z, vertex.position.z);
+
+                    // 提取法线
                     if (idx.normal_index >= 0) {
                         vertex.normal.x = attrib.normals[3 * size_t(idx.normal_index) + 0];
                         vertex.normal.y = attrib.normals[3 * size_t(idx.normal_index) + 1];
@@ -193,7 +203,7 @@ bool LoadMeshFromOBJ(const std::string& filepath, Mesh& outMesh) {
                         vertex.normal.x = 0.0f; vertex.normal.y = 0.0f; vertex.normal.z = 0.0f;
                     }
 
-                    // 提取纹理坐标 (处理缺失情况)
+                    // 提取纹理坐标
                     if (idx.texcoord_index >= 0) {
                         vertex.texcoord.x = attrib.texcoords[2 * size_t(idx.texcoord_index) + 0];
                         vertex.texcoord.y = attrib.texcoords[2 * size_t(idx.texcoord_index) + 1];
@@ -202,24 +212,33 @@ bool LoadMeshFromOBJ(const std::string& filepath, Mesh& outMesh) {
                         vertex.texcoord.x = 0.0f; vertex.texcoord.y = 0.0f;
                     }
 
-                    // 记录新索引并压入容器
-                    uniqueVertices[idx] = static_cast<int>(outMesh.vertices.size());
-                    outMesh.vertices.push_back(vertex);
+                    uniqueVertices[idx] = static_cast<int>(meshGeometry.vertices.size());
+                    meshGeometry.vertices.push_back(vertex);
                 }
 
-                // 从哈希表中获取该顶点的唯一索引
                 current_face_indices[v] = uniqueVertices[idx];
             }
 
-            // 构建三角形索引结构并压入容器
             tri.v1 = current_face_indices[0];
             tri.v2 = current_face_indices[1];
             tri.v3 = current_face_indices[2];
-            outMesh.indices.push_back(tri);
+            meshGeometry.indices.push_back(tri);
 
             index_offset += 3;
         }
     }
 
-    return true;
+    // 构建唯一的一个 SubMesh（需确保模型并非空文件）
+    //if (!meshGeometry.indices.empty()) {
+    //    SubMesh singleSubMesh;
+    //    singleSubMesh.indexOffset = 0;
+    //    // 根据结构体注释，indexCount 对应 TriangleIndices 的数量。如果是指单顶点索引数量，则需改为 size() * 3
+    //    singleSubMesh.indexCount = static_cast<uint32_t>(meshGeometry.indices.size());
+    //    singleSubMesh.mat = nullptr;
+    //    singleSubMesh.bound = meshBound;
+
+    //    //meshGeometry.subMeshes.push_back(singleSubMesh);
+    //}
+    meshGeometry.localBound = meshBound;
+    return meshGeometry;
 }

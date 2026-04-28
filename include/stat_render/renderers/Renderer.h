@@ -13,12 +13,17 @@ private:
     // Camera camera;
     // float l,r,t,b;
     Mode mode;
+    int tileSize = 32;
+    int SPP = 32;
+    int resolution = 1024;
 
 public:
     Renderer() : mode(Mode::PathTracing) {}
     Renderer(Mode mode_):
     mode(mode_) {}
-    
+    Renderer(Mode mode_, int tileSize_, int spp, int resolution_) :
+        mode(mode_), tileSize(tileSize_), SPP(spp), resolution(resolution_)  {}
+
     ~Renderer() = default;
 
     // Pipeline

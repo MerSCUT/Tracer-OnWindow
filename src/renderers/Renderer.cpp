@@ -176,9 +176,10 @@ Color3f Renderer::CastRay(const Ray& ray, const Scene& scene, int depth, SobolSa
         {
         case Mode::PathTracing :
         {
+            // ========================================================
             // 光源
-            Object* ob = payload.obj;
-            ob->getBound();
+            const Object* ob = payload.obj;
+            //ob->getBound();
             Material* w = payload.obj->getMaterial();
             if (payload.obj->getMaterial()->isEmissive())
             {
@@ -190,6 +191,8 @@ Color3f Renderer::CastRay(const Ray& ray, const Scene& scene, int depth, SobolSa
             
             // 非光源
             // 1. 直接光照
+            // ========================================================
+
             Color3f L_dir(0.0f, 0.0f, 0.0f);
             LightSample ls = scene.sampleLight(sampler);
             auto p = payload.position;
@@ -213,21 +216,15 @@ Color3f Renderer::CastRay(const Ray& ray, const Scene& scene, int depth, SobolSa
                 auto fr = payload.material->eval(wi, wo, n_p);
                 auto Li = ls.radiance;
 
-                
                 auto cos_thetai = dot(n_p, wi);
                 cos_thetai = cos_thetai > 0.0f ? cos_thetai : 0.0f;
                 auto cos_thetaip = std::abs(dot(n_l, wi));
-                
-
-                //assert(cos_thetaip >= 0.f);
                 auto dis = dot(p-l, p-l);
-                //assert(cos_thetai >= 0.0f);
-                //assert(cos_thetaip >= 0.0f);
+                
                 assert(ls.pdf > 0.0f && "光源采样信息错误");
                 L_dir = fr * Li * cos_thetai * cos_thetaip / (dis * ls.pdf) ;
-                int kkk;
             }
-
+            // ========================================================
             Color3f L_indir(0.f, 0.f, 0.f);
             // Russian Roulette
             float p_rr = 0.8f;
@@ -241,23 +238,20 @@ Color3f Renderer::CastRay(const Ray& ray, const Scene& scene, int depth, SobolSa
             wo = wo.normalized();
             // 采样入射方向 wi (局部)
             Vec3f wi_ind = payload.material->sample(wo, n_p, sampler);
+
             if (wi_ind.norm2() <= 0.f){
                 return L_dir;
             }
+
             float pdf_ind = payload.material->pdf(wi_ind, wo, n_p);
             pdf_ind = std::max(pdf_ind, 1e-3f);
-
             Ray ray_ind(p + Epsilon * n_p, wi_ind);
-            
             auto fr = payload.material->eval(wi_ind, wo, n_p);
             auto costhetai = dot(n_p, wi_ind);
             auto Li = CastRay(ray_ind, scene, depth+1, sampler);
             L_indir = fr * Li * costhetai / (pdf_ind * p_rr);
-            
-            
+
             return L_dir + L_indir;
-            
-            
             break;
         }
             

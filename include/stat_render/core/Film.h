@@ -24,6 +24,7 @@ public:
     // Write in .ppm
     void Write() { Write(output_path); }
     void Write(std::string path);
+    void WritePNG(std::string path);
 };
 
 

@@ -6,9 +6,9 @@
 #include<limits>
 #include<iostream>
 class Bound{
-private:
-    Point3f Pmin, Pmax;
 public:
+    Point3f Pmin, Pmax;
+//=========================
     Bound() : 
     Pmin(std::numeric_limits<float>::max(),std::numeric_limits<float>::max(),std::numeric_limits<float>::max() ), 
     Pmax(-std::numeric_limits<float>::max(), -std::numeric_limits<float>::max(), -std::numeric_limits<float>::max()) {}
@@ -17,13 +17,13 @@ public:
         Vec3f epvec(Epsilon, Epsilon, Epsilon);
         Pmin -= epvec;
         Pmax += epvec;
-
     } 
 
 
     ~Bound() = default;
     // 包围盒合并函数
     void Union(const Bound& other);
+    void Union(const Vec3f& vec);
 
     Point3f Center() const { return (Pmin + Pmax) * 0.5f; }
 

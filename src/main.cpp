@@ -32,6 +32,12 @@ const std::string PROJECT_ROOT = PROJECT_ROOT_DIR;
 MeshLoader meshLoader;
 void test_trace()
 {
+    // Render Configuration
+    int tileSize = 32;
+    int SPP = 16;
+    int resolution = 256;
+
+
     // Material
     std::shared_ptr<Material> red_Diffuse = std::make_shared<Diffuse>(DiffuseColor::RED, SamplingStrategy::CosineWeighted);
     std::shared_ptr<Material> green_Diffuse = std::make_shared<Diffuse>(DiffuseColor::GREEN, SamplingStrategy::CosineWeighted);
@@ -51,7 +57,20 @@ void test_trace()
     
     // Load Bunny
     MeshGeometry bunnyGeo = meshLoader.LoadMeshFromOBJ(PROJECT_ROOT + "/asset/bunny/bunny.obj");
-    auto bunny = std::make_unique<Mesh>(bunnyGeo, golden_Microfacet);
+    // =======================Bunny Model Transform
+    float bunnyScale = 4.f;
+    Transform Scale = Transform::Scale(bunnyScale, bunnyScale, bunnyScale);
+    // 2. 旋转变换 (实际代码值为绕 Y 轴旋转 180 度)
+    // 注：此处传入的 180.0f 假定你的 Transform::Rotate 内部期望角度制 (Degrees)。
+    // 如果你的实现期望弧度制 (Radians)，请改为 Pi 或 180.0f * Pi / 180.0f
+    Transform Rotate = Transform::Rotate(180.0f * Pi / 180.f, Vec3f(0.0f, 1.0f, 0.0f));
+
+    // 3. 平移变换 (tx = -0.28, ty = -0.1, tz = -0.3)
+    Transform Translate = Transform::Translate(Vec3f(-0.38f, -0.6f, -0.3f));
+
+    // 4. 组合变换：v_world = (T * R * S) * v_local
+    Transform bunnyModelTransform = Translate * Rotate * Scale;
+    auto bunny = std::make_unique<Mesh>(std::move(bunnyGeo), golden_Microfacet, bunnyModelTransform);
     // Load Cornel Box
     MeshGeometry floorGeo = meshLoader.LoadMeshFromOBJ(PROJECT_ROOT + "/asset/cornellbox/floor.obj");
     MeshGeometry leftGeo = meshLoader.LoadMeshFromOBJ(PROJECT_ROOT + "/asset/cornellbox/left.obj");
@@ -60,47 +79,50 @@ void test_trace()
     MeshGeometry shortboxGeo = meshLoader.LoadMeshFromOBJ(PROJECT_ROOT + "/asset/cornellbox/shortbox.obj");
     MeshGeometry tallboxGeo = meshLoader.LoadMeshFromOBJ(PROJECT_ROOT + "/asset/cornellbox/tallbox.obj");
     
-    auto floor = std::make_unique<Mesh>(floorGeo, white_Diffuse);
-    auto left = std::make_unique<Mesh>(leftGeo, red_Diffuse);
-    auto right = std::make_unique<Mesh>(rightGeo, green_Diffuse);
-    auto light = std::make_unique<Mesh>(lightGeo, emissive_brighter);
-    auto shortbox = std::make_unique<Mesh>(shortboxGeo, white_Diffuse);
-    auto tallbox = std::make_unique<Mesh>(tallboxGeo, white_Diffuse);
+    // CornelBox Transform
+    Bound cornelBound;
+    cornelBound.Union(floorGeo.localBound);
+    cornelBound.Union(leftGeo.localBound);
+    cornelBound.Union(rightGeo.localBound);
+    cornelBound.Union(lightGeo.localBound);
+    cornelBound.Union(shortboxGeo.localBound);
+    cornelBound.Union(tallboxGeo.localBound);
+
+    // 先归一化到 -1, 1
+    auto cornelM = cornelBound.getNormalizeMatrix();
+    auto center = cornelBound.Center();
+    float scale = (cornelBound.MaxExtent() > 1e-8f) ? (2.0f / cornelBound.MaxExtent()) : 1.0f;
+
+    Transform cornelTransform = Transform::Scale(scale, scale, scale) * Transform::Translate(-center);
+
+
+
+    auto floor = std::make_unique<Mesh>(std::move(floorGeo), white_Diffuse, cornelTransform);
+    auto left = std::make_unique<Mesh>(std::move(leftGeo), red_Diffuse, cornelTransform);
+    auto right = std::make_unique<Mesh>(std::move(rightGeo), green_Diffuse, cornelTransform);
+    auto light = std::make_unique<Mesh>(std::move(lightGeo), emissive_brighter, cornelTransform);
+    auto shortbox = std::make_unique<Mesh>(std::move(shortboxGeo), white_Diffuse, cornelTransform);
+    auto tallbox = std::make_unique<Mesh>(std::move(tallboxGeo), white_Diffuse, cornelTransform);
     
     
+	bunny->ObjectToWorld = bunnyModelTransform;
+    // =======================Bunny Model Transform
+    auto lightPtr = light.get();
+
     
     // Sent to Scene
+    scene.pushObject(std::move(bunny));
     scene.pushObject(std::move(floor));
     scene.pushObject(std::move(left));
     scene.pushObject(std::move(right));
     scene.pushObject(std::move(light));
     scene.pushObject(std::move(shortbox));
     scene.pushObject(std::move(tallbox));
-    scene.pushObject(std::move(bunny)); 
-    scene.pushLight(std::move(std::make_unique<Mesh>(lightGeo, emissive_brighter)));
+    
+	auto areaLight = std::make_unique<AreaLight>(lightPtr, emissive_brighter->getEmission());
+    scene.pushLight(std::move(areaLight));
 
-
-    // ===============================
-    paths.push_back(PROJECT_ROOT + "/asset/bunny/bunny.obj");
-    paths.push_back(PROJECT_ROOT + "/asset/cornellbox/floor.obj");
-    paths.push_back(PROJECT_ROOT + "/asset/cornellbox/left.obj");
-    paths.push_back(PROJECT_ROOT + "/asset/cornellbox/light.obj");
-    paths.push_back(PROJECT_ROOT + "/asset/cornellbox/right.obj");
-    paths.push_back(PROJECT_ROOT + "/asset/cornellbox/shortbox.obj");
-    paths.push_back(PROJECT_ROOT + "/asset/cornellbox/tallbox.obj");
-    std::vector<Color3f> emissions(paths.size(), Color3f(0.f,0.f,0.f));
-    emissions[3] = Color3f(10.f, 8.5f, 3.0f) ;
-
-    std::vector<DiffuseColor> dcs {
-        DiffuseColor::BLUE,
-        DiffuseColor::WHITE,
-        DiffuseColor::RED,
-        DiffuseColor::WHITE,
-        DiffuseColor::GREEN,
-        DiffuseColor::WHITE,
-        DiffuseColor::WHITE
-    };
-    // ===============================
+    scene.BuildTLAS();
 
 
 
@@ -108,7 +130,7 @@ void test_trace()
     std::cout << "[Info] 开始导入场景模型..." << std::endl;
     auto start_import = std::chrono::high_resolution_clock::now();
     //====================================================
-    scene.loadOBJlist(paths, emissions, dcs);
+    //scene.loadOBJlist(paths, emissions, dcs);
     //====================================================
     auto end_import = std::chrono::high_resolution_clock::now();
     std::chrono::duration<double> import_time = end_import - start_import;
@@ -121,19 +143,25 @@ void test_trace()
         Vec3f(0.f, 1.f, 0.f),
         film, 45
     );
-    Renderer r;
+    Renderer r(Mode::PathTracing, tileSize, SPP, resolution);
 
     std::cout << "[Info] 开始执行渲染管线..." << std::endl;
+    std::cout << "[Input] 请输入渲染优化配置 : 1 为普通管线, 2 为多线程分块渲染" << std::endl;
+    int op = 1; std::cin >> op;
+    
     auto start_render = std::chrono::high_resolution_clock::now();
     //====================================================
-    // r.RenderPipeline(scene, film, camera);
+    if (op == 1)
+    r.RenderPipeline(scene, film, camera);
+    else
     r.RenderMultiThreading(scene, film, camera);
     //====================================================
     auto end_render = std::chrono::high_resolution_clock::now();
     std::chrono::duration<double> render_time = end_render - start_render;
     std::cout << "[Timer] 渲染耗时: " << render_time.count() << " 秒\n" << std::endl;
-
+    
     film.Write(PROJECT_ROOT + "/images/test_VS.ppm");
+    film.WritePNG(PROJECT_ROOT + "/images/test_VS.png");
     std::cout << "[Info] 图片输出 : images/test_VS.ppm" << std::endl;
     return;
 }

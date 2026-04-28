@@ -25,4 +25,5 @@ public:
     virtual void sample(float xi1, float xi2, Point3f& position, Vec3f& normal, float& pdf) const { return; }
 
     virtual void transform(const Mat4f& Matrix) { return; }
+    virtual Bound getWorldBound() const = 0 ;
 };

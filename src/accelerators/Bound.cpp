@@ -6,6 +6,12 @@ void Bound::Union(const Bound& other)
     Pmax = Pmax.cwiseMax(other.Pmax);
 }
 
+void Bound::Union(const Vec3f& vec) {
+    Pmin = Pmin.cwiseMin(vec);
+    Pmax = Pmax.cwiseMax(vec);
+}
+
+
 bool Bound::intersect(const Ray& ray) {
     float tin = -std::numeric_limits<float>::max();
     float tmax = std::numeric_limits<float>::max();

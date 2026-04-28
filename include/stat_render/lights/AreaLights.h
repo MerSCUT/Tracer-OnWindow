@@ -2,24 +2,36 @@
 
 #include"stat_render/core/common.h"
 #include"stat_render/shapes/Object.h"
-#include"stat_render/lights/Light.h"
-class AreaLight : public Light{
-private:
+#include"stat_render/shapes/Mesh.h"
+#include<memory>
+
+struct LightSample
+{
+    Point3f position;
+    Vec3f normal;
     Color3f radiance;
-    Object* obj;           // 发光的几何体
+    float pdf;
+    Object* obj;
+};
+
+class AreaLight {
 public:
-    AreaLight(Object* objptr, Color3f radiance_) : obj(objptr), radiance(radiance_) 
+    Color3f radiance;
+    Mesh* obj;           // 发光的几何体
+
+    AreaLight(Mesh* objptr, Color3f radiance_) : 
+        obj(objptr), radiance(radiance_) 
     {}
 
     ~AreaLight() = default;
     
     Color3f getRadiance() const { return radiance; }
 
-    Object* getObject() const override { return obj; }
+    Object* getObject() const  { return obj; }
 
     
     
-    LightSample sampleLight(float u1, float u2) const override
+    LightSample sampleLight(float u1, float u2) const 
     {
         LightSample ls;
 
@@ -28,6 +40,4 @@ public:
         ls.obj = obj;
         return ls;
     }
-
-    
 };

@@ -15,43 +15,34 @@ private:
 
     // new member ==============
     std::vector<std::unique_ptr<Object>> unique_objects;
-    std::vector<std::unique_ptr<Mesh>> unique_lights;
+    std::vector<std::unique_ptr<AreaLight>> unique_lights;
+    Bound sbound;
+	std::unique_ptr<BVH> TLAS;
     // new member ==============
 
-
-    // std::vector<Object*> objects;
-    std::vector<std::shared_ptr<Object>> objects;
-    // std::vector<Light*> lights;
-    std::vector<std::shared_ptr<Light>> lights;
-    std::vector<std::shared_ptr<Material>> material_pool;
     Mat4f M_normalize;
 public:
     Scene() {}
     
     ~Scene() = default;
-    void AddObject(std::shared_ptr<Object> object) { objects.push_back(std::move(object)); }
-    void AddLight(std::shared_ptr<Light> light) { lights.push_back(std::move(light)); }
     Mat4f getNormalizeMatrix() { return M_normalize; }
 
-    void loadOBJlist(const std::vector<std::string>& paths, const std::vector<Color3f>& emissions, const std::vector<DiffuseColor>& dcs);
+	void BuildTLAS();
+
     
     void pushObject(std::unique_ptr<Mesh> object) {
+        sbound.Union(object->world_bound);
         unique_objects.push_back(std::move(object));
     }
 
-    void pushLight(std::unique_ptr<Mesh> light) {
-        unique_lights.push_back(std::move(light));
-    }
+    void pushLight(std::unique_ptr<AreaLight> light) {
+        unique_lights.push_back(std::move(light)) ;
+    }    
 
-    void loadOBJ(const std::string& path,  Bound& boundbox, const Color3f& emission = Color3f(0.0f, 0.0f, 0.0f), const DiffuseColor dc = DiffuseColor::WHITE);
-    void loadBunny(const std::string& path,  Bound& boundbox, const Color3f& emission, const DiffuseColor dc);
-    
-    inline std::vector<std::shared_ptr<Object>> getObjects() const { return objects; }
-    inline std::vector<std::shared_ptr<Light>> getLights() const { return lights; }
-    
     Hit intersect(const Ray& ray) const;
-    // 在 light 列表里采样
+    
     LightSample sampleLight(SobolSampler& sampler) const;
+
     float getLightpdf(Object* obj) const {
         return 1.0f / obj->SurfaceArea();
     }

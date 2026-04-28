@@ -17,6 +17,14 @@ public:
 	Transform operator*(const Transform& t2) const {
 		return Transform(m * t2.m, t2.mInv * mInv);
 	}
+
+	Vec4f operator*(const Vec4f& v) const {
+		return m * v;
+	}
+	
+	Vec4f ApplyInverseTranspose(const Vec4f& vec) const {
+		return mInv.transpose() * vec;
+	}
 };
 
 

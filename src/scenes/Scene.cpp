@@ -1,95 +1,56 @@
 #include"stat_render/scenes/Scene.h"
+#include"stat_render/accelerators/BVH.h"
 #include<iostream>
-Mat4f getModelMatrix();
 
-Hit Scene::intersect(const Ray& ray) const
+
+//void Scene::BuildTLAS() {
+//	// 构建 TLAS
+//	std::vector<Object*> obj_ptrs;
+//	for (auto& obj : unique_objects) {
+//		obj_ptrs.push_back(obj.get());
+//	}
+//	TLAS = std::make_unique<BVH>(obj_ptrs, 12);
+//}
+
+void Scene::BuildTLAS() {
+    if (unique_objects.empty()) return;
+
+    // 1. 收集所有顶层实例（Object）的包围盒信息，构建代理数组
+    std::vector<BVHPrimitiveInfo> primitiveInfo;
+    primitiveInfo.reserve(unique_objects.size());
+
+    sbound = Bound(); // 重置并计算场景全局包围盒
+
+    for (uint32_t i = 0; i < unique_objects.size(); ++i) {
+        // 【关键】必须获取物体变换到世界空间 (World Space) 后的包围盒！
+        // 如果物体有 ObjectToWorld 矩阵，需要计算变换后的 AABB
+        Bound objWorldBound = unique_objects[i]->getWorldBound();
+
+        primitiveInfo.emplace_back(i, objWorldBound);
+        sbound.Union(objWorldBound);
+    }
+
+    // 2. 调用专门针对 Object 实例重载的 BVH 构造函数
+    TLAS = std::make_unique<BVH>(primitiveInfo, sbound, 12);
+    TLAS->BindSceneObjects(unique_objects); // 绑定指针，用于遍历求交
+}
+
+
+Hit Scene::intersect(const Ray& world_ray) const
 {
-    Hit payload;
-    for(auto& obj : objects)
-    {
-        if (Hit temp = obj->intersect(ray); 
-            temp.intersected && temp.tmin <= payload.tmin)
-        {
-            payload = temp;
-        }
-    }
-    return payload;
-}
-void Scene::loadOBJlist(const std::vector<std::string>& paths, const std::vector<Color3f>& emissions, const std::vector<DiffuseColor>& dcs)
-{
-    Bound bound;
-    assert(paths.size() == emissions.size() && paths.size() == dcs.size());
-    // Load all objects
-    
-    for(int n = 1; n < paths.size(); n++)
-    {
-        this->loadOBJ(paths[n], bound, emissions[n], dcs[n]);
-    }
-    // Normalize the entire scene to canonical cubic;
-    M_normalize = bound.getNormalizeMatrix();
-    bound = Bound();
-    for(auto& obj : objects)
-    {
-        obj->transform(M_normalize);
-        
-        bound.Union(obj->getBound());
-    }
-    // std::cout << bound.getPmin().x << ' ' << bound.getPmin().y << ' ' << bound.getPmin().z << std::endl;
-    this->loadBunny(paths[0], bound, emissions[0], dcs[0]);
-    
-    return;
+    if (!TLAS) return Hit();
+    return TLAS->intersectTLAS(world_ray, TLAS->root);
 }
 
-
-void Scene::loadOBJ(const std::string& path,  Bound& boundbox, const Color3f& emission, const DiffuseColor dc)
-{
-    std::shared_ptr<Material> m;
-    if (emission == Color3f(0.f))
-    {
-        m = std::make_shared<Diffuse>(dc
-            // , SamplingStrategy::Uniform
-        );
-    }
-    else
-    {
-        m = std::make_shared<Emissive>(emission);
-    }
-    auto mesh = Parser::loadOBJ(path, m);
-    AddObject(mesh);
-    boundbox.Union(mesh->getBound());
-    if (!(emission == Color3f(0.f))) 
-    {
-        AddLight(std::make_shared<AreaLight>(mesh.get(),emission));
-    }
-    material_pool.push_back(m);
-    return;
-}
-void Scene::loadBunny(const std::string& path,  Bound& boundbox, const Color3f& emission, const DiffuseColor dc){
-    // auto m = std::make_shared<Diffuse>(dc
-    //         // , SamplingStrategy::Uniform
-    // );
-
-    auto m = std::make_shared<Microfacet>(0.5f, Color3f(1.00, 0.71, 0.29), Color3f(0.f));
-    auto mesh = Parser::loadOBJ(path, m);
-
-    auto M = mesh->getBound().getNormalizeMatrix();      // Normalize
-    mesh->transform(M);
-
-    mesh->transform(getModelMatrix());
-    AddObject(mesh);
-    boundbox.Union(mesh->getBound());
-    material_pool.push_back(m);
-    return;
-}
 
 
 LightSample Scene::sampleLight(SobolSampler& sampler) const
 {
     LightSample ls;
     // 假设场景中只有一个光源
-    assert(lights.size() == 1);
-    auto l = lights[0];
+    assert(unique_lights.size() == 1);
     Vec2f u = sampler.get2D();
+    auto l = unique_lights[0].get();
     ls = l->sampleLight(u.x, u.y);
     ls.pdf = std::max(ls.pdf, 1e-5f);
     return ls;
@@ -97,44 +58,3 @@ LightSample Scene::sampleLight(SobolSampler& sampler) const
     // ... 多个光源 :
 }
 
-Mat4f getModelMatrix() {
-    // 1. 缩放矩阵 (Scale: 0.1)
-    float s = 0.3f;
-    Mat4f scaleMat(
-        s, 0.0f, 0.0f, 0.0f,
-        0.0f,    s, 0.0f, 0.0f,
-        0.0f, 0.0f,    s, 0.0f,
-        0.0f, 0.0f, 0.0f, 1.0f
-    );
-
-    // 2. 旋转矩阵 (Rotation: 绕 Y 轴旋转 10 度)
-    // C++ 中 <cmath> 的三角函数需要传入弧度制
-    float angleRad = 180.0f * Pi / 180.0f;
-    float cosTheta = std::cos(angleRad);
-    float sinTheta = std::sin(angleRad);
-    
-    // 绕 Y 轴旋转的标准矩阵
-    Mat4f rotMat(
-         cosTheta, 0.0f, sinTheta, 0.0f,
-             0.0f, 1.0f,     0.0f, 0.0f,
-        -sinTheta, 0.0f, cosTheta, 0.0f,
-             0.0f, 0.0f,     0.0f, 1.0f
-    );
-
-    // 3. 平移矩阵 (Translate: 无平移)
-    // 根据你的类定义，默认构造函数即为单位矩阵 (Identity)
-    // t_z = -0.3 填入第三行、第四列
-    float t_x = -0.28f;
-    float t_y = -0.1f;
-    float t_z = -0.3f;
-    Mat4f transMat(
-        1.0f, 0.0f, 0.0f,  t_x,
-        0.0f, 1.0f, 0.0f,  t_y,
-        0.0f, 0.0f, 1.0f,  t_z,
-        0.0f, 0.0f, 0.0f,  1.0f
-    );
-
-    // 4. 计算并返回最终的模型矩阵 (Model Matrix)
-    // 顶点着色时：v_world = (T * R * S) * v_local
-    return transMat * rotMat * scaleMat; 
-}

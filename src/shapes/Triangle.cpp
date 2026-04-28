@@ -52,7 +52,7 @@ Hit Triangle::intersect(const Ray& ray)
     payload.dist_square = (ray.origin - payload.position).norm2();
     payload.incident = -ray.direct;
     payload.material = material;
-    payload.obj = this;
+    //payload.obj = this;
     
     Vec3f normal = cross(e1, e2).normalized();
     

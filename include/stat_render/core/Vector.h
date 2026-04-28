@@ -2,6 +2,8 @@
 #include<cassert>
 #include<cmath>
 #include<iostream>
+class Vec4f;
+
 class Vec3f
 {
 public:
@@ -14,6 +16,7 @@ public:
     inline Vec3f() : x(0.0f), y(0.0f), z(0.0f) {}
     inline Vec3f(float a) : x(a), y(a), z(a) {}
     inline Vec3f(float _x, float _y, float _z) : x(_x), y(_y), z(_z) {}
+    explicit inline Vec3f(const Vec4f& v);
     ~Vec3f() = default;
 
     inline Vec3f& operator+=(const Vec3f& other) { x += other.x; y += other.y; z += other.z; return *this; }
@@ -54,6 +57,8 @@ public:
 
     inline Vec3f cwiseMax(const Vec3f& v) const { return Vec3f(std::max(x, v.x), std::max(y, v.y), std::max(z, v.z)); }
 };
+
+
 
 
 
@@ -143,4 +148,10 @@ inline Vec4f toPoint4D(const Vec3f& p) {
 
 inline Vec4f toVec4D(const Vec3f& v) {
     return Vec4f(v, 0.0f);
+}
+
+inline Vec3f::Vec3f(const Vec4f& v) {
+    x = v.x;
+    y = v.y;
+    z = v.z;
 }
